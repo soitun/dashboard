@@ -47,7 +47,6 @@ class NavBarCtrl {
     });
 
 
-
     this.profile = codenvyAPI.getProfile().getProfile();
     if (this.profile.attributes) {
       this.email = this.profile.attributes.email;
@@ -93,12 +92,8 @@ class NavBarCtrl {
     return this.codenvyUser.isAdmin();
   }
 
-  isSimpleUser() {
+  isUser() {
     return this.codenvyUser.isUser();
-  }
-
-  flipOnpremAdminExpanded() {
-    this.onpremAdminExpanded = !this.onpremAdminExpanded;
   }
 }
 

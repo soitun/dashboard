@@ -22,14 +22,14 @@ class CodenvyUser {
    * Default constructor that is using resource
    * @ngInject for Dependency injection
    */
-  constructor ($resource, $q) {
+  constructor($resource, $q) {
 
     // keep resource
     this.$resource = $resource;
     this.$q = $q;
 
     // remote call
-    this.remoteUserAPI = this.$resource('/api/user',{}, {
+    this.remoteUserAPI = this.$resource('/api/user', {}, {
       findByID: {method: 'GET', url: '/api/user/:userId'},
       findByEmail: {method: 'GET', url: '/api/user/find?email=:userEmail'},
       inRole: {method: 'GET', url: '/api/user/inrole?role=:role&scope=:scope&scopeId=:scopeId'},
@@ -86,20 +86,41 @@ class CodenvyUser {
     if (!ignoreCache && this.userPromise) {
       return this.userPromise;
     }
-    this.user = this.remoteUserAPI.get();
-
+    // check user or not
+    let isUserPromise = this.fetchIsUserInRole('user', 'system', '');
     // check admin or not
     let isAdminPromise = this.fetchIsUserInRole('admin', 'system', '');
-    let isUserPromise = this.fetchIsUserInRole('user', 'system', '');
 
-    let promise = this.user.$promise;
-    // check if if was OK or not
-    let updatePromise = promise.then(() => {
-      this.isLogged = true;
-    }, () => {
+    let deferred = this.$q.defer();
+
+    isUserPromise.then(() => {
+      if (this.isUser()) {
+        //if user
+        this.user = this.remoteUserAPI.get();
+        // check if if was OK or not
+        this.user.$promise.then(() => {
+          this.isLogged = true;
+          deferred.resolve();
+        }, (error) => {
+          this.isLogged = false;
+          deferred.reject(error);
+        });
+      } else {
+        isAdminPromise.then(() => {
+          deferred.resolve();
+          this.isLogged = true;
+        }, (error) => {
+          this.isLogged = false;
+          deferred.reject(error);
+        });
+      }
+    }, (error) => {
       this.isLogged = false;
+      deferred.reject(error);
     });
-    this.userPromise = this.$q.all([updatePromise, isUserPromise, isAdminPromise]);
+
+    this.userPromise = this.$q.all([deferred.promise, isUserPromise, isAdminPromise]);
+
     return this.userPromise;
   }
 
@@ -134,19 +155,22 @@ class CodenvyUser {
   }
 
   setPassword(password) {
-    let promise = this.remoteUserAPI.setPassword('password=' + password).$promise;
-
-    return promise;
+    return this.remoteUserAPI.setPassword('password=' + password).$promise;
   }
 
   fetchIsUserInRole(role, scope, scopeId) {
     let promise = this.remoteUserAPI.inRole({role: role, scope: scope, scopeId: scopeId}).$promise;
-    let parsedResultPromise = promise.then((userInRole) => {
-      this.isUserInRoleMap.set(scope + '/' + role + ':' + scopeId, userInRole);
-    }, () => {
 
+    let deferred = this.$q.defer();
+
+    promise.then((userInRole) => {
+      this.isUserInRoleMap.set(scope + '/' + role + ':' + scopeId, userInRole);
+      deferred.resolve();
+    }, (error) => {
+      deferred.reject(error);
     });
-    return parsedResultPromise;
+
+    return deferred.promise;
   }
 
   /**
